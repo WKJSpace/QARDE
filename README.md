@@ -224,6 +224,6 @@ The paper references the open-source project repository at:
   title  = {QARDE: A CV-QKD-based Adaptive Reconfigurable NB-LDPC Decoder Engine for RFSoC FPGA Systems},
   journal = {ACM Transactions on Reconfigurable Technology and Systems},
   year   = {2026},
-  note   = {Manuscript submitted to ACM}
+  note   = {Manuscript under review}
 }
 ```
