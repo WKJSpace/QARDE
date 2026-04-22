@@ -159,13 +159,9 @@ sizes, field orders, and decoder modes.
 To highlight evaluation trends, the following figures can be included directly in the repository documentation.
 
 <p align="center">
-  <img src="Figs/GFEval.png" alt="GF evaluation results" width="48%">
-  <img src="Figs/codesizeEval.png" alt="Code size evaluation results" width="48%">
-</p>
-
-<p align="center">
-  <img src="Figs/freqEval.png" alt="Frequency evaluation results" width="48%">
-  <img src="Figs/TputFactor.png" alt="Throughput factor evaluation" width="48%">
+  <img src="Figs/GFEval.png" alt="GF evaluation results" width="85%">
+  <img src="Figs/codesizeEval.png" alt="Code size evaluation results" width="85%">
+  <img src="Figs/freqEval.png" alt="Frequency evaluation results" width="85%">
 </p>
 
 ---
