@@ -1,7 +1,0 @@
-{
-    "clangd.fallbackFlags": [
-        "-I/home/cad/xilinx/Vivado-2025.2/2025.2/Vitis/include",
-        "-I/home/cad/xilinx/Vivado-2025.2/2025.2/Vitis/include/etc",
-        "-I/home/cad/xilinx/Vivado-2025.2/2025.2/Vitis/lnx64/tools/auto_cc/include"
-    ]
-}
