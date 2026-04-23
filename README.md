@@ -181,6 +181,7 @@ To highlight evaluation trends, the following figures can be included directly i
 
 ```text
 QARDE/
+├── Figs/
 ├── src/
 │   ├── nb_ldpc.hpp
 │   ├── qarde.hpp
