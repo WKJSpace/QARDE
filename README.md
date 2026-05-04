@@ -1,5 +1,5 @@
 # QARDE
-### Adaptive & Reconfigurable NB-LDPC Decoder Engine for CV-QKD on RFSoC FPGAs
+### An Adaptive Reconfigurable NB-LDPC Decoder Engine on RFSoC FPGAs for CV-QKD Post-Processing
 
 <p align="center">
   <img alt="platform" src="https://img.shields.io/badge/Platform-RFSoC4x2-blue">
