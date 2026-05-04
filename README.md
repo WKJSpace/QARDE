@@ -223,7 +223,7 @@ The paper references the open-source project repository at:
 @article{wei2026qarde,
   author = {Wei, Kaijie and Garg, Devanshu and Nagai, Ryutaro and Tomono, Takao and Amano, Hideharu},
   title  = {QARDE: A CV-QKD-based Adaptive Reconfigurable NB-LDPC Decoder Engine for RFSoC FPGA Systems},
-  journal = {ACM Transactions on Reconfigurable Technology and Systems},
+
   year   = {2026},
   note   = {Manuscript under review}
 }
