@@ -204,7 +204,7 @@ QARDE/
 
 ## 📚 Paper
 
-**QARDE: A CV-QKD-based Adaptive Reconfigurable NB-LDPC Decoder Engine for RFSoC FPGA Systems**  
+**QARDE: An Adaptive Reconfigurable NB-LDPC Decoder Engine on RFSoC FPGAs for CV-QKD Post-Processing**  
 Kaijie Wei, Devanshu Garg, Ryutaro Nagai, Takao Tomono, and Hideharu Amano.
 
 ---
@@ -222,7 +222,7 @@ The paper references the open-source project repository at:
 ```bibtex
 @article{wei2026qarde,
   author = {Wei, Kaijie and Garg, Devanshu and Nagai, Ryutaro and Tomono, Takao and Amano, Hideharu},
-  title  = {QARDE: A CV-QKD-based Adaptive Reconfigurable NB-LDPC Decoder Engine for RFSoC FPGA Systems},
+  title  = {QARDE: An Adaptive Reconfigurable NB-LDPC Decoder Engine on RFSoC FPGAs for CV-QKD Post-Processing},
   year   = {2026},
   note   = {Manuscript under review}
 }
