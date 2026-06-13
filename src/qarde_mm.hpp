@@ -1,11 +1,9 @@
-#ifndef QARDE_HPP
-#define QARDE_HPP
+#ifndef QARDE_MM_HPP
+#define QARDE_MM_HPP
 
 #include "qarde_gf.hpp"
 #include "qarde_init.hpp"
-#include "qarde_ems_cnu.hpp"
 #include "qarde_mm_cnu.hpp"
-#include "qarde_fbems_cnu.hpp"
 #include "qarde_vnu.hpp"
 #include "qarde_perm.hpp"
 #include "nb_ldpc.hpp"
@@ -19,10 +17,9 @@ template <int FP_Q, int Q_FACTOR,
           int FP_E, int FP_N, int FP_M, int FP_NM, int NM_FACTOR,
           int FP_DEG_C, int FP_DEG_V, int FP_LDR_MIN, int FP_LDR_MAX,
           int FP_BUBBLE_HALF, int FP_BUBBLE, int FP_NBOPER>
-static void qarde_decoder(
+static void qarde_decoder_mm(
     LLR_TYPE         L[FP_N][FP_Q],
     ems_corr_mode_t  corr_mode,
-    qarde_cnu_mode_t cnu_mode,
     int              max_iter,
     LLR_TYPE         alpha,
     LLR_TYPE         offset,
@@ -65,6 +62,7 @@ static void qarde_decoder(
     #pragma HLS DEPENDENCE dependent=false variable=LDPC_U_pc type=intra
     #pragma HLS DEPENDENCE dependent=false variable=LDPC_V_pv type=inter
     #pragma HLS DEPENDENCE dependent=false variable=LDPC_V_pv type=intra
+
     // Clang-format on
 
     if (!init_done) {
@@ -118,39 +116,10 @@ ITER_LOOP:
             );
         }
 
-        switch (cnu_mode) {
-        case QARDE_CNU_EMS:
-            qarde_ems_cnu<FP_Q, Q_FACTOR, FP_E, FP_M,
-                          FP_NM, NM_FACTOR, FP_DEG_C,
-                          FP_LDR_MIN, FP_LDR_MAX>::cnu_run(
-                LDPC_adj_c, LDPC_U_pc, LDPC_V_cp, damp
-            );
-            break;
-
-        case QARDE_CNU_MM:
-            qarde_mm_cnu<FP_Q, Q_FACTOR, FP_E, FP_M,
-                         FP_DEG_C, FP_LDR_MIN, FP_LDR_MAX>::cnu_run(
-                LDPC_adj_c, LDPC_U_pc, LDPC_V_cp, damp
-            );
-            break;
-
-        case QARDE_CNU_FBEMS:
-            qarde_fbems_cnu<FP_Q, Q_FACTOR, FP_E, FP_M,
-                            FP_NM, NM_FACTOR, FP_DEG_C,
-                            FP_LDR_MIN, FP_LDR_MAX,
-                            FP_BUBBLE_HALF, FP_BUBBLE, FP_NBOPER>::cnu_run(
-                LDPC_adj_c, LDPC_U_pc, LDPC_V_cp, damp
-            );
-            break;
-
-        default:
-            qarde_ems_cnu<FP_Q, Q_FACTOR, FP_E, FP_M,
-                          FP_NM, NM_FACTOR, FP_DEG_C,
-                          FP_LDR_MIN, FP_LDR_MAX>::cnu_run(
-                LDPC_adj_c, LDPC_U_pc, LDPC_V_cp, damp
-            );
-            break;
-        }
+        qarde_mm_cnu<FP_Q, Q_FACTOR, FP_E, FP_M,
+                     FP_DEG_C, FP_LDR_MIN, FP_LDR_MAX>::cnu_run(
+            LDPC_adj_c, LDPC_U_pc, LDPC_V_cp, damp
+        );
 
     PERM_C2V:
         for (int e = 0; e < FP_E; ++e) {
@@ -173,4 +142,4 @@ ITER_LOOP:
     synd = !conv;
 }
 
-#endif // QARDE_HPP
+#endif // QARDE_MM_HPP

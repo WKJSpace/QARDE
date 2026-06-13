@@ -1,11 +1,7 @@
-#include "qarde_config.hpp"
-#include "qarde.hpp"
+#include "qarde_mm.hpp"
 #include <hls_stream.h>
 
-// ---------------------------------------------------------------------------
-// Helper task 1: Read intrinsic LLRs from AXI-Stream into local buffer
-// ---------------------------------------------------------------------------
-static void read_intrinsic_llr(
+static void read_intrinsic_llr_mm(
     hls::stream<LLR_TYPE> &intrinsic_LLR,
     LLR_TYPE               L_buf[LDPC_N][GF_Q])
 {
@@ -21,10 +17,7 @@ read_L_outer:
     }
 }
 
-// ---------------------------------------------------------------------------
-// Helper task 2: Write hard decisions from local buffer out to AXI-MM
-// ---------------------------------------------------------------------------
-static void write_decisions(
+static void write_decisions_mm(
     GF_TYPE  x_hat_buf[LDPC_N],
     bool     synd_buf,
     GF_TYPE *decide,
@@ -44,23 +37,16 @@ write_decide_loop:
     synd = synd_buf;
 }
 
-// ---------------------------------------------------------------------------
-// Top-level accelerator
-// ---------------------------------------------------------------------------
-void qarde_accel(
+void qarde_accel_mm(
     hls::stream<LLR_TYPE> &intrinsic_LLR,
     LLR_TYPE               alpha,
     LLR_TYPE               offset,
     LLR_TYPE               damp,
     int                    max_iter,
     ems_corr_mode_t        corr_mode,
-    qarde_cnu_mode_t       cnu_mode,
     bool                  &synd,
     GF_TYPE               *decide)
 {
-    // -----------------------------------------------------------------------
-    // AXI interfaces
-    // -----------------------------------------------------------------------
     #pragma HLS INTERFACE axis      port=intrinsic_LLR
     #pragma HLS INTERFACE m_axi     port=decide      offset=slave bundle=gmem depth=LDPC_N
     #pragma HLS INTERFACE s_axilite port=alpha       bundle=control
@@ -68,29 +54,24 @@ void qarde_accel(
     #pragma HLS INTERFACE s_axilite port=damp        bundle=control
     #pragma HLS INTERFACE s_axilite port=max_iter    bundle=control
     #pragma HLS INTERFACE s_axilite port=corr_mode   bundle=control
-    #pragma HLS INTERFACE s_axilite port=cnu_mode    bundle=control
     #pragma HLS INTERFACE s_axilite port=decide      bundle=control
     #pragma HLS INTERFACE s_axilite port=synd        bundle=control
     #pragma HLS INTERFACE s_axilite port=return      bundle=control
 
-
-    // -----------------------------------------------------------------------
-    // Local buffers
-    // -----------------------------------------------------------------------
     LLR_TYPE L_buf[LDPC_N][GF_Q];
     GF_TYPE  x_hat_buf[LDPC_N];
     bool     synd_buf;
-    
+
 // Clang-format off
     #pragma HLS ARRAY_PARTITION variable=L_buf dim=2 cyclic factor=GF_FACTOR
     #pragma HLS BIND_STORAGE variable=L_buf     type=ram_t2p impl=bram
     #pragma HLS BIND_STORAGE variable=x_hat_buf type=ram_t2p impl=bram
     #pragma HLS DATAFLOW
     // Clang-format on
-    
-    read_intrinsic_llr(intrinsic_LLR, L_buf);
 
-    qarde_decoder<
+    read_intrinsic_llr_mm(intrinsic_LLR, L_buf);
+
+    qarde_decoder_mm<
         GF_Q, GF_FACTOR,
         LDPC_E, LDPC_N, LDPC_M,
         EMS_NM, NB_FACTOR,
@@ -99,7 +80,6 @@ void qarde_accel(
         BUBBLE_HALF, BUBBLE, NBOPER>(
         L_buf,
         corr_mode,
-        cnu_mode,
         max_iter,
         alpha,
         offset,
@@ -107,5 +87,5 @@ void qarde_accel(
         x_hat_buf,
         synd_buf);
 
-    write_decisions(x_hat_buf, synd_buf, decide, synd);
+    write_decisions_mm(x_hat_buf, synd_buf, decide, synd);
 }

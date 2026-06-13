@@ -26,7 +26,6 @@ struct qarde_mm_cnu
         // Clang-format on
         for (int a = 0; a < (FP_Q / Q_FACTOR); ++a) {
 // Clang-format off
-            #pragma HLS PIPELINE
             // Clang-format on
             for (int b = 0; b < Q_FACTOR; b++) {
 // Clang-format off
@@ -77,7 +76,7 @@ row_loop:
                 #pragma HLS UNROLL
                 // Clang-format on
                 const int x = u;
-                const int y = (int)qarde_gf<FP_Q, Q_FACTOR>::gf_add((GF_TYPE)a_out, (GF_TYPE)x);
+                const int y = qarde_gf<FP_Q, Q_FACTOR>::gf_add_idx((GF_TYPE)a_out, (GF_TYPE)x);
                 lane[u] = max2(A[x], B[y]);
             }
 
@@ -108,7 +107,7 @@ row_loop:
                     #pragma HLS UNROLL
                     // Clang-format on
                     const int x = base + u;
-                    const int y = (int)qarde_gf<FP_Q, Q_FACTOR>::gf_add((GF_TYPE)a_out, (GF_TYPE)x);
+                    const int y = qarde_gf<FP_Q, Q_FACTOR>::gf_add_idx((GF_TYPE)a_out, (GF_TYPE)x);
                     lane[u] = max2(A[x], B[y]);
                 }
 
@@ -152,7 +151,7 @@ row_loop:
         // Clang-format on
         for (int a = 0; a < FP_Q; ++a) {
 // Clang-format off
-            #pragma HLS UNROLL factor=Q_FACTOR
+            #pragma HLS UNROLL
             // Clang-format on
             F[0][a] = A[0][a];
         }
@@ -161,7 +160,6 @@ row_loop:
     For_acc:
         for (int i = 1; i < FP_DEG_C; ++i) {
 // Clang-format off
-            #pragma HLS DATAFLOW
             // Clang-format on
             combine_minmax(F[i - 1], A[i], F[i]);
         }
@@ -169,7 +167,7 @@ row_loop:
         // B[d-1] = A[d-1]
         for (int a = 0; a < FP_Q; ++a) {
 // Clang-format off
-            #pragma HLS UNROLL factor=Q_FACTOR
+            #pragma HLS UNROLL
             // Clang-format on
             B[FP_DEG_C - 1][a] = A[FP_DEG_C - 1][a];
         }
@@ -178,49 +176,35 @@ row_loop:
     Back_acc:
         for (int i = FP_DEG_C - 2; i >= 0; --i) {
 // Clang-format off
-            #pragma HLS DATAFLOW
             // Clang_format on
             combine_minmax(B[i + 1], A[i], B[i]);
         }
 
         // Emit per excluded edge
         for (int t = 0; t < FP_DEG_C; ++t) {
-// Clang-format off
-            #pragma HLS PIPELINE
-            // Clang-format on
-
             if (FP_DEG_C == 1) {
-                // Only one edge: Out[0][:] = 0
                 for (int a = 0; a < FP_Q; ++a) {
-// Clang-format off            
-                    #pragma HLS UNROLL factor=Q_FACTOR
+// Clang-format off
+                    #pragma HLS UNROLL
                     // Clang-format on
-                    Out[0][a] = (LLR_TYPE)0;
+                    Out[t][a] = (LLR_TYPE)0;
+                }
+            } else if (t == 0) {
+                for (int a = 0; a < FP_Q; ++a) {
+// Clang-format off
+                    #pragma HLS UNROLL
+                    // Clang-format on
+                    Out[t][a] = B[1][a];
+                }
+            } else if (t == FP_DEG_C - 1) {
+                for (int a = 0; a < FP_Q; ++a) {
+// Clang-format off
+                    #pragma HLS UNROLL
+                    // Clang-format on
+                    Out[t][a] = F[FP_DEG_C - 2][a];
                 }
             } else {
-                // t = 0
-                for (int a = 0; a < FP_Q; ++a) {
-// Clang-format off
-                    #pragma HLS UNROLL factor=Q_FACTOR
-                    // Clang-format on
-                    Out[0][a] = B[1][a];
-                }
-
-                // middle: t = 1 .. FP_DEG_C-2
-                for (int t = 1; t < FP_DEG_C - 1; ++t) {
-// Clang-format off
-                    #pragma HLS PIPELINE off
-                    // Clang-format on
-                    combine_minmax(F[t - 1], B[t + 1], Out[t]);
-                }
-
-                // t = FP_DEG_C - 1
-                for (int a = 0; a < FP_Q; ++a) {
-// Clang-format off
-                    #pragma HLS UNROLL factor=Q_FACTOR
-                    // Clang-format on
-                    Out[FP_DEG_C - 1][a] = F[FP_DEG_C - 2][a];
-                }
+                combine_minmax(F[t - 1], B[t + 1], Out[t]);
             }
 
             // normalize/clip only at the end (safe for Min-Max)
@@ -231,13 +215,12 @@ row_loop:
     // -----------------------------------------
     // Run Min-Max CNU for all CNs/edges
     // -----------------------------------------
-    static void cnu_run(GF_TYPE    LDPC_adj_c[FP_M][FP_DEG_C],
+    static void cnu_run(EDGE_TYPE  LDPC_adj_c[FP_M][FP_DEG_C],
                         LLR_TYPE   LDPC_U_pc[FP_E][FP_Q],
                         LLR_TYPE   LDPC_V_cp[FP_E][FP_Q],
                         LLR_TYPE   damp)
     {
 // Clang-format off
-        #pragma HLS DATAFLOW
         // Clang-format on
 
     CN_LOOP:
@@ -245,7 +228,7 @@ row_loop:
             // Load A[t] from U on all edges of this CN
             LLR_TYPE A[FP_DEG_C][FP_Q];
 // Clang-format off
-            // #pragma HLS ARRAY_PARTITION variable=A dim=1 complete
+            #pragma HLS ARRAY_PARTITION variable=A dim=1 complete
             #pragma HLS ARRAY_PARTITION variable=A dim=2 cyclic factor=Q_FACTOR
             // Clang-format on
 
@@ -257,7 +240,7 @@ row_loop:
                 const int e = (int)LDPC_adj_c[c][t];
                 for (int a = 0; a < FP_Q; ++a) {
 // Clang-format off
-                    #pragma HLS UNROLL factor=Q_FACTOR
+                    #pragma HLS UNROLL
                     // Clang-format on
                     A[t][a] = LDPC_U_pc[e][a];
                 }
@@ -276,13 +259,13 @@ row_loop:
         WRITE_OUT:
             for (int t = 0; t < FP_DEG_C; ++t) {
 // Clang-format off
-                #pragma HLS PIPELINE
-                #pragma HLS DEPENDENCE variable=LDPC_V_cp inter false
+                #pragma HLS PIPELINE II=3
                 // Clang-format on
                 const int e_out = (int)LDPC_adj_c[c][t];
+
                 for (int a = 0; a < FP_Q; ++a) {
 // Clang-format off
-                    #pragma HLS UNROLL factor=Q_FACTOR
+                    #pragma HLS UNROLL
                     // Clang-format on
                     const LLR_TYPE oldv = LDPC_V_cp[e_out][a];
                     const LLR_TYPE m1   = ((LLR_TYPE)1.0 - damp) * Out[t][a];

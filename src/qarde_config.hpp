@@ -15,4 +15,34 @@ void qarde_accel(
     bool                  &synd,
     GF_TYPE               *decide);
 
+void qarde_accel_ems(
+    hls::stream<LLR_TYPE> &intrinsic_LLR,
+    LLR_TYPE               alpha,
+    LLR_TYPE               offset,
+    LLR_TYPE               damp,
+    int                    max_iter,
+    ems_corr_mode_t        corr_mode,
+    bool                  &synd,
+    GF_TYPE               *decide);
+
+void qarde_accel_fbems(
+    hls::stream<LLR_TYPE> &intrinsic_LLR,
+    LLR_TYPE               alpha,
+    LLR_TYPE               offset,
+    LLR_TYPE               damp,
+    int                    max_iter,
+    ems_corr_mode_t        corr_mode,
+    bool                  &synd,
+    GF_TYPE               *decide);
+
+void qarde_accel_mm(
+    hls::stream<LLR_TYPE> &intrinsic_LLR,
+    LLR_TYPE               alpha,
+    LLR_TYPE               offset,
+    LLR_TYPE               damp,
+    int                    max_iter,
+    ems_corr_mode_t        corr_mode,
+    bool                  &synd,
+    GF_TYPE               *decide);
+
 #endif

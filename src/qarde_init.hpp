@@ -6,11 +6,11 @@
 
 // Here we just define the initializer.
 
-static void ldpc_graph_init(const GF_TYPE rows[LDPC_E],
-		const GF_TYPE cols[LDPC_E], const GF_TYPE hs[LDPC_E],
-		GF_TYPE LDPC_adj_v[LDPC_N][DEG_V], GF_TYPE LDPC_adj_c[LDPC_M][DEG_C],
-		GF_TYPE LDPC_edge_c[LDPC_E], GF_TYPE LDPC_edge_v[LDPC_E], GF_TYPE LDPC_edge_h[LDPC_E],
-		GF_TYPE LDPC_perm_to_chk[LDPC_E][GF_Q], GF_TYPE LDPC_perm_to_var[LDPC_E][GF_Q],
+static void ldpc_graph_init(const CHECK_TYPE rows[LDPC_E],
+		const NODE_TYPE cols[LDPC_E], const GF_TYPE hs[LDPC_E],
+		EDGE_TYPE LDPC_adj_v[LDPC_N][DEG_V], EDGE_TYPE LDPC_adj_c[LDPC_M][DEG_C],
+		CHECK_TYPE LDPC_edge_c[LDPC_E], NODE_TYPE LDPC_edge_v[LDPC_E], GF_TYPE LDPC_edge_h[LDPC_E],
+		int LDPC_perm_to_chk[LDPC_E][GF_Q], int LDPC_perm_to_var[LDPC_E][GF_Q],
 		LLR_TYPE LDPC_U_vp[LDPC_E][GF_Q], LLR_TYPE LDPC_U_pc[LDPC_E][GF_Q],
 		LLR_TYPE LDPC_V_lp[LDPC_E][GF_Q], LLR_TYPE LDPC_V_pv[LDPC_E][GF_Q]){
 
@@ -20,9 +20,6 @@ static void ldpc_graph_init(const GF_TYPE rows[LDPC_E],
 // Clang-format off
     #pragma HLS BIND_STORAGE variable=deg_v type=ram_t2p impl=bram
     #pragma HLS BIND_STORAGE variable=deg_c type=ram_t2p impl=bram
-	#pragma HLS BIND_STORAGE variable=H_rows type=ram_2p impl=bram
-	#pragma HLS BIND_STORAGE variable=H_cols type=ram_2p impl=bram
-	#pragma HLS BIND_STORAGE variable=H_vals type=ram_2p impl=bram
     // Clang-format on
 
     // init degrees and adjacency
@@ -55,8 +52,8 @@ static void ldpc_graph_init(const GF_TYPE rows[LDPC_E],
 // Clang-format off
 		#pragma HLS PIPELINE
 		// Clang-format on
-        GF_TYPE r = rows[e];  // check index
-        GF_TYPE c = cols[e];  // variable index
+        CHECK_TYPE r = rows[e];  // check index
+        NODE_TYPE c = cols[e];   // variable index
         GF_TYPE h = hs[e];    // GF coefficient
 
         LDPC_edge_c[e] = r;
@@ -67,23 +64,23 @@ static void ldpc_graph_init(const GF_TYPE rows[LDPC_E],
         qarde_gf<GF_Q, GF_FACTOR>::gf_build_edge_perm(h, LDPC_perm_to_chk[e], LDPC_perm_to_var[e]);
 
         // variable side
-        int dv = deg_v[c];
+        int dv = deg_v[(int)c];
         if (dv < DEG_V) {
-            LDPC_adj_v[c][dv] = e;
-            deg_v[c] = dv + 1;
+            LDPC_adj_v[(int)c][dv] = e;
+            deg_v[(int)c] = dv + 1;
         }
 
         // check side
-        int dc = deg_c[r];
+        int dc = deg_c[(int)r];
         if (dc < DEG_C) {
-            LDPC_adj_c[r][dc] = e;
-            deg_c[r] = dc + 1;
+            LDPC_adj_c[(int)r][dc] = e;
+            deg_c[(int)r] = dc + 1;
         }
 
         // initialise messages on edge e
         for (int a = 0; a < GF_Q; ++a) {
 // Clang-format off
-			#pragma HLS UNROLL factor=GF_FACTOR
+			#pragma HLS UNROLL
 			// Clang-format on
             LDPC_U_vp[e][a] = (LLR_TYPE)0.0;
             LDPC_U_pc[e][a] = (LLR_TYPE)0.0;

@@ -33,7 +33,7 @@ struct qarde_ems_cnu {
 
         for (int m = 0; m < FP_NM; ++m) {
 // Clang-format off
-            #pragma HLS UNROLL factor=NM_FACTOR
+            #pragma HLS UNROLL
         	// Clang-format on
             cost[m] = g - maxU[m].val;
             sym[m]  = maxU[m].idx;
@@ -43,7 +43,7 @@ struct qarde_ems_cnu {
         int has0 = 0;
         for (int m = 0; m < FP_NM; ++m) {
 // Clang-format off
-            #pragma HLS UNROLL factor=NM_FACTOR
+            #pragma HLS UNROLL
         	// Clang-format on
             if (sym[m] == 0) {
                 has0 = 1;
@@ -68,7 +68,6 @@ struct qarde_ems_cnu {
         // Clang-format on
         for (int a = 0; a < (FP_Q / Q_FACTOR); ++a) {
 // Clang-format off
-            #pragma HLS PIPELINE
         	// Clang-format on
 		rec_U:
         	for (int b = 0 ; b < Q_FACTOR; b++) {
@@ -115,7 +114,6 @@ struct qarde_ems_cnu {
         // Top-M truncation for each incoming message (except the current edge)
         for (int k = 0; k < (FP_DEG_C - 1); ++k) {
 // Clang-format off
-            #pragma HLS PIPELINE
         	// Clang-format on
             fp_topM_costs(U_in[k], sym[k], cost[k], &Gamma[k]);
             Gsum += Gamma[k];
@@ -132,7 +130,7 @@ struct qarde_ems_cnu {
         // Initial DP state
         for (int s = 0; s < FP_Q; ++s) {
 // Clang-format off
-            #pragma HLS UNROLL factor=Q_FACTOR
+            #pragma HLS UNROLL
         	// Clang-format on
             dp_cur[s] = (s == 0) ? (LLR_TYPE)0.0 : (LLR_TYPE)FP_LDR_MAX;
         }
@@ -144,7 +142,7 @@ struct qarde_ems_cnu {
 		upd_init:
             for (int s = 0; s < FP_Q; ++s) {
 // Clang-format off
-                #pragma HLS UNROLL factor=Q_FACTOR
+                #pragma HLS UNROLL
             	// Clang-format on
                 dp_upd[s] = (LLR_TYPE)FP_LDR_MAX;
             }
@@ -159,10 +157,10 @@ struct qarde_ems_cnu {
 			upd_reduce_m:
                 for (int m = 0; m < FP_NM; ++m) {
 // Clang-format off
-                    #pragma HLS UNROLL factor=NM_FACTOR
+                    #pragma HLS UNROLL
                 	// Clang-format on
                     GF_TYPE u  = sym[k][m];
-                    int a = (int)qarde_gf<FP_Q, Q_FACTOR>::gf_add(ns, u);
+                    int a = qarde_gf<FP_Q, Q_FACTOR>::gf_add_idx((GF_TYPE)ns, u);
                     LLR_TYPE v = dp_cur[a] + cost[k][m];
                     dpList[m] = v;
                 }
@@ -178,7 +176,7 @@ struct qarde_ems_cnu {
             // Commit dp_upd -> dp_cur
             for (int s = 0; s < FP_Q; ++s) {
 // Clang-format off
-                #pragma HLS UNROLL factor=Q_FACTOR
+                #pragma HLS UNROLL
             	// Clang-format on
                 dp_cur[s] = dp_upd[s];
             }
@@ -187,7 +185,7 @@ struct qarde_ems_cnu {
         // Final output
         for (int s = 0; s < FP_Q; ++s) {
 // Clang-format off
-            #pragma HLS UNROLL factor=Q_FACTOR
+            #pragma HLS UNROLL
         	// Clang-format on
             V_out[s] = Gsum - dp_cur[s];
         }
@@ -198,18 +196,17 @@ struct qarde_ems_cnu {
     // -----------------------------------------
     //  Run EMS CNU for all checks and edges
     // -----------------------------------------
-    static void cnu_run(GF_TYPE    LDPC_adj_c[FP_M][FP_DEG_C],
+    static void cnu_run(EDGE_TYPE  LDPC_adj_c[FP_M][FP_DEG_C],
                         LLR_TYPE   LDPC_U_pc[FP_E][FP_Q],
                         LLR_TYPE   LDPC_V_cp[FP_E][FP_Q],
                         LLR_TYPE   damp) {
 // Clang-format off
-		#pragma HLS DATAFLOW
     	// Clang-format on
     CN_LOOP:
         for (int c = 0; c < FP_M; ++c) {
 		CN_LOOP_DEGC:
             for (int t = 0; t < FP_DEG_C; ++t) {
-                GF_TYPE e_out = LDPC_adj_c[c][t];
+                int e_out = (int)LDPC_adj_c[c][t];
 
                 // Collect all U_pc except the one on edge e_out
                 LLR_TYPE Uin[FP_DEG_C - 1][FP_Q];
@@ -228,7 +225,7 @@ struct qarde_ems_cnu {
                     int e_in = LDPC_adj_c[c][r];
                     for (int a = 0; a < FP_Q; ++a) {
 // Clang-format off
-                    	#pragma HLS UNROLL factor=Q_FACTOR
+                    	#pragma HLS UNROLL
                     	// Clang-format on
                     	Uin[L_idx][a] = LDPC_U_pc[e_in][a];
                     }
@@ -248,20 +245,18 @@ struct qarde_ems_cnu {
 // Clang-format off
                 #pragma HLS ARRAY_PARTITION variable=Vlp     cyclic factor=Q_FACTOR
                 #pragma HLS ARRAY_PARTITION variable=Vlp_out cyclic factor=Q_FACTOR
-				#pragma HLS BIND_STORAGE variable=Vlp     type=ram_2p impl=bram
-				#pragma HLS BIND_STORAGE variable=Vlp_out type=ram_2p impl=bram
                 // Clang-format on
 
                 for (int a = 0; a < FP_Q; ++a) {
 // Clang-format off
-                    #pragma HLS UNROLL factor=Q_FACTOR
+                    #pragma HLS UNROLL
                 	// Clang-format on
                     Vlp[a] = LDPC_V_cp[e_out][a];
                 }
 
                 for (int a = 0; a < FP_Q; ++a) {
 // Clang-format off
-                    #pragma HLS UNROLL factor=Q_FACTOR
+                    #pragma HLS UNROLL
                 	// Clang-format on
 
                 	LLR_TYPE m1, m2, s;
@@ -280,7 +275,7 @@ struct qarde_ems_cnu {
 
                 for (int a = 0; a < FP_Q; ++a) {
 // Clang-format off
-                    #pragma HLS UNROLL factor=Q_FACTOR
+                    #pragma HLS UNROLL
                 	// Clang-format on
                     LDPC_V_cp[e_out][a] = Vlp_out[a];
                 }

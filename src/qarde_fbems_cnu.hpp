@@ -41,7 +41,7 @@ struct qarde_fbems_cnu {
 
         for (int m = 0; m < FP_NM; ++m) {
 // Clang-format off
-            #pragma HLS UNROLL factor=NM_FACTOR
+            #pragma HLS UNROLL
             // Clang-format on
             cost[m] = g - maxU[m].val;
             sym[m]  = maxU[m].idx;
@@ -51,7 +51,7 @@ struct qarde_fbems_cnu {
         int has0 = 0;
         for (int m = 0; m < FP_NM; ++m) {
 // Clang-format off
-            #pragma HLS UNROLL factor=NM_FACTOR
+            #pragma HLS UNROLL
             // Clang-format on
             if (sym[m] == 0) { has0 = 1; break; }
         }
@@ -66,10 +66,6 @@ struct qarde_fbems_cnu {
     // -----------------------------------------
     static inline void postprocess_ldr(LLR_TYPE U[FP_Q])
     {
-// Clang-format off
-        #pragma HLS INLINE
-        // Clang-format on
-        
         LLR_TYPE z = U[0], U_res[Q_FACTOR];
 // Clang-format off
         #pragma HLS ARRAY_PARTITION variable=U_res complete
@@ -78,7 +74,6 @@ struct qarde_fbems_cnu {
 
         for (int a = 0; a < (FP_Q / Q_FACTOR); ++a) {
 // Clang-format off
-            #pragma HLS PIPELINE
             // Clang-format on
             for (int b = 0; b < Q_FACTOR; b++) {
 // Clang-format off
@@ -101,14 +96,72 @@ struct qarde_fbems_cnu {
     // -----------------------------------------
     //  FB-EMS ElementaryStep helpers
     // -----------------------------------------
-    static inline LLR_TYPE INF_VAL() { return (LLR_TYPE)1e5; }
+    static inline LLR_TYPE INF_VAL() { return (LLR_TYPE)FP_LDR_MAX; }
+
+    static void update_sorted_frontier(
+        const ValIdx<LLR_TYPE> updated_entry,
+        const int              pos,
+        ValIdx<LLR_TYPE>       sorted[FP_BUBBLE]
+    ){
+// Clang-format off
+        #pragma HLS INLINE
+        #pragma HLS ARRAY_PARTITION variable=sorted complete
+        // Clang-format on
+
+        ValIdx<LLR_TYPE> original[FP_BUBBLE];
+        int i_final = pos;
+// Clang-format off
+        #pragma HLS ARRAY_PARTITION variable=original complete
+        // Clang-format on
+
+    update_sorted_copy:
+        for (int i = 0; i < FP_BUBBLE; i++) {
+// Clang-format off
+            #pragma HLS UNROLL
+            // Clang-format on
+            original[i] = sorted[i];
+        }
+
+    update_sorted_scan:
+        for (int step = 1; step < FP_BUBBLE; step++) {
+// Clang-format off
+            #pragma HLS UNROLL
+            // Clang-format on
+            int left  = pos - step;
+            int right = pos + step;
+
+            bool use_left  = (left >= 0) && (updated_entry.val < original[left].val);
+            bool use_right = (right < FP_BUBBLE) && (updated_entry.val > original[right].val);
+
+            if (use_left) {
+                i_final = left;
+            } else if (use_right) {
+                i_final = right;
+            }
+        }
+
+    update_sorted_shift:
+        for (int i = 0; i < FP_BUBBLE; i++) {
+// Clang-format off
+            #pragma HLS UNROLL
+            // Clang-format on
+            if (i_final < pos && i <= pos && i > i_final) {
+                sorted[i] = original[i - 1];
+            } else if (i_final > pos && i >= pos && i < i_final) {
+                sorted[i] = original[i + 1];
+            } else if (i != i_final) {
+                sorted[i] = original[i];
+            }
+        }
+
+        sorted[i_final] = updated_entry;
+    }
 
     static void ElementaryStepInit(
         const LLR_TYPE Input1[FP_NM],
         const LLR_TYPE Input2[FP_NM],
         LLR_TYPE       loc_Output[FP_NM],
         GF_TYPE        loc_IndiceOut[FP_NM],
-        LLR_TYPE       tab_aux[FP_NM][FP_NM],
         TabCompEntry<LLR_TYPE> tab_comp[FP_BUBBLE]
     ){
 // Clang-format off
@@ -117,38 +170,23 @@ struct qarde_fbems_cnu {
         #pragma HLS ARRAY_PARTITION variable=Input2 cyclic factor=NM_FACTOR
         #pragma HLS ARRAY_PARTITION variable=loc_Output cyclic factor=NM_FACTOR
         #pragma HLS ARRAY_PARTITION variable=loc_IndiceOut cyclic factor=NM_FACTOR
-        #pragma HLS ARRAY_PARTITION variable=tab_aux dim=2 cyclic factor=NM_FACTOR
         #pragma HLS ARRAY_PARTITION variable=tab_comp complete
         // Clang-format on
 
         for (int i = 0; i < FP_NM; i++) {
 // Clang-format off
-            #pragma HLS UNROLL factor=NM_FACTOR
+            #pragma HLS UNROLL
             // Clang-format on
             loc_Output[i]    = INF_VAL();
             loc_IndiceOut[i] = (GF_TYPE)-1;
         }
 
-        // Precompute only bubble-relevant area; anything outside bubble set to INF (safer than 0)
-        for (int i = 0; i < FP_NM; i++) {
-// Clang-format off
-            #pragma HLS PIPELINE
-            // Clang-format on
-            for (int j = 0; j < FP_NM; j++) {
-// Clang-format off
-                #pragma HLS UNROLL factor=NM_FACTOR
-                // Clang-format on
-                bool in_bubble = (i < FP_BUBBLE_HALF) || (j < FP_BUBBLE_HALF);
-                tab_aux[i][j] = in_bubble ? (LLR_TYPE)(Input1[i] + Input2[j]) : INF_VAL();
-            }
-        }
 
         // Seed bubble frontier: first column (rows 0..HALF-1)
         for (int j = 0; j < FP_BUBBLE_HALF; j++) {
 // Clang-format off
-            #pragma HLS PIPELINE
             // Clang-format on
-            tab_comp[j] = { tab_aux[j][0], j, 0 };
+            tab_comp[j] = { (LLR_TYPE)(Input1[j] + Input2[0]), j, 0 };
         }
 
         // Seed bubble frontier: middle row
@@ -157,12 +195,15 @@ struct qarde_fbems_cnu {
             #pragma HLS UNROLL
             // Clang-format on
             int idx = j + FP_BUBBLE_HALF;
-            tab_comp[idx] = { tab_aux[FP_BUBBLE_HALF][j], FP_BUBBLE_HALF, j };
+            tab_comp[idx] = { (LLR_TYPE)(Input1[FP_BUBBLE_HALF] + Input2[j]), FP_BUBBLE_HALF, j };
         }
     }
 
+
+
     static void ElementaryStepCore(
-        const LLR_TYPE (&tab_aux)[FP_NM][FP_NM],
+        const LLR_TYPE  Input1[FP_NM],
+        const LLR_TYPE  Input2[FP_NM],
         const GF_TYPE   IndiceInput1[FP_NM],
         const GF_TYPE   IndiceInput2[FP_NM],
         LLR_TYPE        loc_Output[FP_NM],
@@ -171,7 +212,8 @@ struct qarde_fbems_cnu {
     ){
 // Clang-format off
         #pragma HLS INLINE
-        #pragma HLS ARRAY_PARTITION variable=tab_aux dim=2 cyclic factor=NM_FACTOR
+        #pragma HLS ARRAY_PARTITION variable=Input1 cyclic factor=NM_FACTOR
+        #pragma HLS ARRAY_PARTITION variable=Input2 cyclic factor=NM_FACTOR
         #pragma HLS ARRAY_PARTITION variable=tab_comp complete
         #pragma HLS ARRAY_PARTITION variable=loc_Output cyclic factor=NM_FACTOR
         #pragma HLS ARRAY_PARTITION variable=loc_IndiceOut cyclic factor=NM_FACTOR
@@ -179,11 +221,20 @@ struct qarde_fbems_cnu {
 
         ValIdx<LLR_TYPE> sorted_validx[FP_BUBBLE];
         LLR_TYPE vals[FP_BUBBLE];
-        ap_uint<FP_Q> GF_out_mask = 0;
+        bool GF_out_mask[FP_Q];
 // Clang-format off
         #pragma HLS ARRAY_PARTITION variable=sorted_validx complete
         #pragma HLS ARRAY_PARTITION variable=vals complete
+        #pragma HLS ARRAY_PARTITION variable=GF_out_mask complete
         // Clang-format on
+
+    init_mask_loop:
+        for (int i = 0; i < FP_Q; ++i) {
+// Clang-format off
+            #pragma HLS UNROLL
+            // Clang-format on
+            GF_out_mask[i] = false;
+        }
 
         for (int i = 0; i < FP_BUBBLE; i++) {
 // Clang-format off
@@ -201,9 +252,7 @@ struct qarde_fbems_cnu {
         NBOPER_LOOP:
         for (int ss = 0; ss < FP_NBOPER; ss++) {
 // Clang-format off
-            #pragma HLS PIPELINE
-            #pragma HLS DEPENDENCE variable=tab_aux inter false
-            #pragma HLS DEPENDENCE variable=tab_aux intra false
+            #pragma HLS PIPELINE II=7
             // Clang-format on
 
             int pos = sorted_validx[0].idx;
@@ -213,12 +262,12 @@ struct qarde_fbems_cnu {
 
             if ((IndiceInput1[x] == (GF_TYPE)-1) || (IndiceInput2[y] == (GF_TYPE)-1)) break;
 
-            GF_TYPE idx_sum = qarde_gf<FP_Q, Q_FACTOR>::gf_add(IndiceInput1[x], IndiceInput2[y]);
+            int idx_sum = qarde_gf<FP_Q, Q_FACTOR>::gf_add_idx(IndiceInput1[x], IndiceInput2[y]);
 
-            if (GF_out_mask[idx_sum] == 0) {
+            if (!GF_out_mask[idx_sum]) {
                 loc_Output[s]    = best_val;
-                loc_IndiceOut[s] = idx_sum;
-                GF_out_mask[idx_sum] = 1;
+                loc_IndiceOut[s] = (GF_TYPE)idx_sum;
+                GF_out_mask[idx_sum] = true;
                 s++;
             }
 
@@ -231,7 +280,7 @@ struct qarde_fbems_cnu {
             tab_comp[pos].x = next_x;
             tab_comp[pos].y = next_y;
 
-            LLR_TYPE new_val = tab_aux[next_x][next_y];
+            LLR_TYPE new_val = (LLR_TYPE)(Input1[next_x] + Input2[next_y]);
             tab_comp[pos].val = new_val;
 
             ValIdx<LLR_TYPE> updated_entry = { new_val, pos };
@@ -244,7 +293,7 @@ struct qarde_fbems_cnu {
                 if (sorted_validx[i].idx == pos) insert_pos = i;
             }
 
-            insert_sort<LLR_TYPE, FP_BUBBLE>(updated_entry, insert_pos, sorted_validx);
+            update_sorted_frontier(updated_entry, insert_pos, sorted_validx);
         }
     }
 
@@ -260,23 +309,21 @@ struct qarde_fbems_cnu {
         #pragma HLS INLINE
         // Clang-format on
 
-        LLR_TYPE tab_aux[FP_NM][FP_NM];
         LLR_TYPE loc_Output[FP_NM];
         GF_TYPE  loc_IndiceOut[FP_NM];
         TabCompEntry<LLR_TYPE> tab_comp[FP_BUBBLE];
 // Clang-format off
-        #pragma HLS ARRAY_PARTITION variable=tab_aux dim=2 cyclic factor=NM_FACTOR
         #pragma HLS ARRAY_PARTITION variable=loc_Output cyclic factor=NM_FACTOR
         #pragma HLS ARRAY_PARTITION variable=loc_IndiceOut cyclic factor=NM_FACTOR
         #pragma HLS ARRAY_PARTITION variable=tab_comp complete
         // Clang-format on
 
-        ElementaryStepInit(Input1, Input2, loc_Output, loc_IndiceOut, tab_aux, tab_comp);
-        ElementaryStepCore(tab_aux, IndiceInput1, IndiceInput2, loc_Output, loc_IndiceOut, tab_comp);
+        ElementaryStepInit(Input1, Input2, loc_Output, loc_IndiceOut, tab_comp);
+        ElementaryStepCore(Input1, Input2, IndiceInput1, IndiceInput2, loc_Output, loc_IndiceOut, tab_comp);
 
         for (int i = 0; i < FP_NM; i++) {
 // Clang-format off
-            #pragma HLS UNROLL factor=NM_FACTOR
+            #pragma HLS UNROLL
             // Clang-format on 
             Output[i]      = loc_Output[i];
             IndiceOutput[i]= loc_IndiceOut[i];
@@ -298,7 +345,6 @@ struct qarde_fbems_cnu {
     ){
 // Clang-format off
         #pragma HLS INLINE off
-        #pragma HLS DATAFLOW
         // Clang-format on
 
         LLR_TYPE OutForward1[FP_NM], OutBackward1[FP_NM];
@@ -321,7 +367,7 @@ struct qarde_fbems_cnu {
             // load next neighbors
             for (int k = 0; k < FP_NM; k++) {
 // Clang-format off
-                #pragma HLS UNROLL factor=NM_FACTOR
+                #pragma HLS UNROLL
                 // Clang-format on
                 OutForward1[k]     = M_VtoC_LLR[kk][k];
                 OutForward1_idx[k] = M_VtoC_GF [kk][k];
@@ -332,7 +378,7 @@ struct qarde_fbems_cnu {
             // store intermediate
             for (int k = 0; k < FP_NM; k++) {
 // Clang-format off
-                #pragma HLS UNROLL factor=NM_FACTOR
+                #pragma HLS UNROLL
                 // Clang-format on
                 MatriceInter[for_inter][k]      = OutForward[k];
                 MatriceInter_idx[for_inter][k]  = OutForward_idx[k];
@@ -375,7 +421,7 @@ struct qarde_fbems_cnu {
 
             for (int i = 0; i < FP_NM; i++) {
 // Clang-format off
-                #pragma HLS UNROLL factor=NM_FACTOR
+                #pragma HLS UNROLL
                 // Clang-format on
                 For_tmp[i]  = MatriceInter[k][i];
                 For_idx[i]  = MatriceInter_idx[k][i];
@@ -386,9 +432,7 @@ struct qarde_fbems_cnu {
             ElementaryStep(For_tmp, Back_tmp, For_idx, Back_idx, Out_tmp, Out_idx);
 
             for (int g = 0; g < FP_NM; g++) {
-// Clang-format off
-                #pragma HLS UNROLL factor=NM_FACTOR
-                // Clang-format on
+                #pragma HLS UNROLL
                 M_CtoV_LLR[k + 1][g] = Out_tmp[g];
                 M_CtoV_GF [k + 1][g] = Out_idx[g];
             }
@@ -406,6 +450,7 @@ struct qarde_fbems_cnu {
     ){
 // Clang-format off
         #pragma HLS INLINE off
+        #pragma HLS ARRAY_PARTITION variable=V_full dim=2 cyclic factor=Q_FACTOR
         // Clang-format on
 
         // offset is not in fp cnu_run signature; keep 0 here
@@ -413,13 +458,13 @@ struct qarde_fbems_cnu {
 
         for (int t = 0; t < FP_DEG_C; t++) {
 // Clang-format off
-            #pragma HLS PIPELINE
+            #pragma HLS PIPELINE II=10
             // Clang-format on
 
             int Stp = FP_NM;
             for (int i = 0; i < FP_NM; i++) {
 // Clang-format off
-                #pragma HLS UNROLL factor=NM_FACTOR
+                #pragma HLS UNROLL
                 // Clang-format on
                 if (M_CtoV_GF_list[t][i] == (GF_TYPE)-1) { Stp = i; break; }
             }
@@ -427,27 +472,27 @@ struct qarde_fbems_cnu {
 
             LLR_TYPE thr = M_CtoV_LLR_list[t][Stp - 1];
 
-            // Default fill
+            LLR_TYPE fill_val = (thr > (LLR_TYPE)0.0) ? (LLR_TYPE)(thr + offset) : (LLR_TYPE)0.0;
+
             for (int k = 0; k < FP_Q; k++) {
 // Clang-format off
-                #pragma HLS UNROLL factor=Q_FACTOR
+                #pragma HLS UNROLL
                 // Clang-format on
-                V_full[t][k] = (thr > (LLR_TYPE)0.0) ? (LLR_TYPE)(thr + offset) : (LLR_TYPE)0.0;
-            }
-
-            // Place the list entries
-            for (int i = 0; i < FP_NM; i++) {
+                LLR_TYPE v = fill_val;
+                for (int i = 0; i < FP_NM; i++) {
 // Clang-format off
-                #pragma HLS UNROLL factor=NM_FACTOR
-                // Clang-format on
-                int idx = (int) M_CtoV_GF_list[t][i];
-                if (idx != -1) {
-                    V_full[t][idx] = M_CtoV_LLR_list[t][i];
+                    #pragma HLS UNROLL
+                    // Clang-format on
+                    int idx = M_CtoV_GF_list[t][i].to_int();
+                    if (idx == k) {
+                        v = M_CtoV_LLR_list[t][i];
+                    }
                 }
+                if ((k == 0) && (v < (LLR_TYPE)0.0)) {
+                    v = (LLR_TYPE)0.0;
+                }
+                V_full[t][k] = v;
             }
-
-            // Ensure symbol 0 exists as reference
-            V_full[t][0] = (V_full[t][0] < (LLR_TYPE)0.0) ? (LLR_TYPE)0.0 : V_full[t][0];
 
             // Normalize + clip to match your original interface
             postprocess_ldr(V_full[t]);
@@ -457,13 +502,12 @@ struct qarde_fbems_cnu {
     // -----------------------------------------
     //  Run FB-EMS CNU for all checks and edges
     // -----------------------------------------
-    static void cnu_run(GF_TYPE  LDPC_adj_c[FP_M][FP_DEG_C],
+    static void cnu_run(EDGE_TYPE  LDPC_adj_c[FP_M][FP_DEG_C],
                         LLR_TYPE LDPC_U_pc[FP_E][FP_Q],
                         LLR_TYPE LDPC_V_cp[FP_E][FP_Q],
                         LLR_TYPE damp)
     {
 // Clang-format off
-        #pragma HLS DATAFLOW
         // Clang-format oN
 
     CN_LOOP:
@@ -481,7 +525,7 @@ struct qarde_fbems_cnu {
 // Clang-format off
                 #pragma HLS PIPELINE
                 // Clang-format on
-                GF_TYPE e_in = LDPC_adj_c[c][t];
+                int e_in = (int)LDPC_adj_c[c][t];
 
                 LLR_TYPE Gamma_dummy;
                 fp_topM_costs(LDPC_U_pc[e_in], M_VtoC_GF[t], M_VtoC_LLR[t], &Gamma_dummy);
@@ -502,7 +546,7 @@ struct qarde_fbems_cnu {
                 // Clang-format on
                 for (int i = 0; i < FP_NM; i++) {
 // Clang-format off
-                    #pragma HLS UNROLL factor=NM_FACTOR
+                    #pragma HLS UNROLL
                     // Clang-format on
                     MatriceInter[k][i]     = INF_VAL();
                     MatriceInter_idx[k][i] = (GF_TYPE)-1;
@@ -521,7 +565,7 @@ struct qarde_fbems_cnu {
 
             for (int i = 0; i < FP_NM; i++) {
 // Clang-format off
-                #pragma HLS UNROLL factor=NM_FACTOR
+                #pragma HLS UNROLL
                 // Clang-format on
                 OutForward[i]     = M_VtoC_LLR[0][i];
                 OutForward_idx[i] = M_VtoC_GF [0][i];
@@ -539,14 +583,16 @@ struct qarde_fbems_cnu {
             LLR_TYPE M_CtoV_LLR_list[FP_DEG_C][FP_NM];
             GF_TYPE  M_CtoV_GF_list [FP_DEG_C][FP_NM];
 // Clang-format off
+            #pragma HLS ARRAY_PARTITION variable=M_CtoV_LLR_list dim=1 complete
             #pragma HLS ARRAY_PARTITION variable=M_CtoV_LLR_list dim=2 cyclic factor=NM_FACTOR
+            #pragma HLS ARRAY_PARTITION variable=M_CtoV_GF_list  dim=1 complete
             #pragma HLS ARRAY_PARTITION variable=M_CtoV_GF_list  dim=2 cyclic factor=NM_FACTOR
             // Clang-format on
 
             // first (t=0) and last (t=deg-1)
             for (int k = 0; k < FP_NM; k++) {
 // Clang-format off
-                #pragma HLS UNROLL factor=NM_FACTOR
+                #pragma HLS UNROLL
                 // Clang-format on
                 M_CtoV_LLR_list[FP_DEG_C - 1][k] = OutForward[k];
                 M_CtoV_GF_list [FP_DEG_C - 1][k] = OutForward_idx[k];
@@ -561,7 +607,6 @@ struct qarde_fbems_cnu {
             // Expand to full vectors + normalize/clip
             LLR_TYPE V_full[FP_DEG_C][FP_Q];
 // Clang-format off
-            #pragma HLS ARRAY_PARTITION variable=V_full dim=1 complete
             #pragma HLS ARRAY_PARTITION variable=V_full dim=2 cyclic factor=Q_FACTOR
             // Clang-format on
 
@@ -570,19 +615,16 @@ struct qarde_fbems_cnu {
             // Write back to edges with damping
             for (int t = 0; t < FP_DEG_C; t++) {
 // Clang-format off
-                #pragma HLS PIPELINE
+                #pragma HLS PIPELINE II=4
                 // Clang-format on
-                GF_TYPE e_out = LDPC_adj_c[c][t];
+                int e_out = (int)LDPC_adj_c[c][t];
 
                 for (int a = 0; a < FP_Q; a++) {
 // Clang-format off
-                    #pragma HLS UNROLL factor=Q_FACTOR
+                    #pragma HLS UNROLL
                     // Clang-format on
-                    LLR_TYPE beta = (LLR_TYPE)1.0 - damp;
-
                     LLR_TYPE oldv = LDPC_V_cp[e_out][a];
-                    LLR_TYPE diff = V_full[t][a] - oldv;
-                    LLR_TYPE newv = oldv + beta * diff;
+                    LLR_TYPE newv = ((LLR_TYPE)1.0 - damp) * V_full[t][a] + damp * oldv;
                     LDPC_V_cp[e_out][a] = newv;
                 }
             }
@@ -590,4 +632,4 @@ struct qarde_fbems_cnu {
     }
 };
 
-#endif // FP_CNU_HPP
+#endif // QARDE_FBEMS_CNU_HPP
