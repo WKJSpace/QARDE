@@ -67,8 +67,6 @@ struct qarde_ems_cnu {
         #pragma HLS ARRAY_PARTITION variable=U_res type=complete
         // Clang-format on
         for (int a = 0; a < (FP_Q / Q_FACTOR); ++a) {
-// Clang-format off
-        	// Clang-format on
 		rec_U:
         	for (int b = 0 ; b < Q_FACTOR; b++) {
 // Clang-format off
@@ -113,8 +111,6 @@ struct qarde_ems_cnu {
 
         // Top-M truncation for each incoming message (except the current edge)
         for (int k = 0; k < (FP_DEG_C - 1); ++k) {
-// Clang-format off
-        	// Clang-format on
             fp_topM_costs(U_in[k], sym[k], cost[k], &Gamma[k]);
             Gsum += Gamma[k];
         }
@@ -137,7 +133,6 @@ struct qarde_ems_cnu {
 
 	EDGE_LOOP:
         for (int k = 0; k < (FP_DEG_C - 1); ++k) {
-
             // Reset dp_upd for this edge
 		upd_init:
             for (int s = 0; s < FP_Q; ++s) {
@@ -200,8 +195,6 @@ struct qarde_ems_cnu {
                         LLR_TYPE   LDPC_U_pc[FP_E][FP_Q],
                         LLR_TYPE   LDPC_V_cp[FP_E][FP_Q],
                         LLR_TYPE   damp) {
-// Clang-format off
-    	// Clang-format on
     CN_LOOP:
         for (int c = 0; c < FP_M; ++c) {
 		CN_LOOP_DEGC:

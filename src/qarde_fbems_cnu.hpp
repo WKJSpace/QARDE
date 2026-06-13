@@ -73,8 +73,6 @@ struct qarde_fbems_cnu {
         // Clang-format on
 
         for (int a = 0; a < (FP_Q / Q_FACTOR); ++a) {
-// Clang-format off
-            // Clang-format on
             for (int b = 0; b < Q_FACTOR; b++) {
 // Clang-format off
                 #pragma HLS UNROLL
@@ -184,8 +182,6 @@ struct qarde_fbems_cnu {
 
         // Seed bubble frontier: first column (rows 0..HALF-1)
         for (int j = 0; j < FP_BUBBLE_HALF; j++) {
-// Clang-format off
-            // Clang-format on
             tab_comp[j] = { (LLR_TYPE)(Input1[j] + Input2[0]), j, 0 };
         }
 
@@ -507,9 +503,6 @@ struct qarde_fbems_cnu {
                         LLR_TYPE LDPC_V_cp[FP_E][FP_Q],
                         LLR_TYPE damp)
     {
-// Clang-format off
-        // Clang-format oN
-
     CN_LOOP:
         for (int c = 0; c < FP_M; ++c) {
 

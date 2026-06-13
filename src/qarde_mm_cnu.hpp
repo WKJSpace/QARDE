@@ -25,8 +25,6 @@ struct qarde_mm_cnu
         #pragma HLS ARRAY_PARTITION variable=U_res complete
         // Clang-format on
         for (int a = 0; a < (FP_Q / Q_FACTOR); ++a) {
-// Clang-format off
-            // Clang-format on
             for (int b = 0; b < Q_FACTOR; b++) {
 // Clang-format off
                 #pragma HLS UNROLL
@@ -159,8 +157,6 @@ row_loop:
         // Forward accumulation
     For_acc:
         for (int i = 1; i < FP_DEG_C; ++i) {
-// Clang-format off
-            // Clang-format on
             combine_minmax(F[i - 1], A[i], F[i]);
         }
 
@@ -220,9 +216,6 @@ row_loop:
                         LLR_TYPE   LDPC_V_cp[FP_E][FP_Q],
                         LLR_TYPE   damp)
     {
-// Clang-format off
-        // Clang-format on
-
     CN_LOOP:
         for (int c = 0; c < FP_M; ++c) {
             // Load A[t] from U on all edges of this CN

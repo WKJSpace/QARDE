@@ -78,8 +78,6 @@ static void qarde_decoder(
 
     INIT_CHK_DIRECT:
         for (int j = 0; j < FP_M; ++j) {
-// Clang-format off
-            // Clang-format on
         INIT_CHK_DIRECT_INNER:
             for (int t = 0; t < FP_DEG_C; ++t) {
 // Clang-format off
