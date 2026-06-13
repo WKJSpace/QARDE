@@ -1,5 +1,6 @@
 # QARDE
-### An Adaptive Reconfigurable NB-LDPC Decoder Engine on RFSoC FPGAs for CV-QKD Post-Processing
+
+### Adaptive and Reconfigurable NB-LDPC Decoder Engine for CV-QKD on RFSoC FPGAs
 
 <p align="center">
   <img alt="platform" src="https://img.shields.io/badge/Platform-RFSoC4x2-blue">
@@ -16,53 +17,42 @@
 <p align="center">
   <b>QARDE</b> is an adaptive and reconfigurable <b>non-binary LDPC (NB-LDPC) decoder engine</b>
   for <b>continuous-variable quantum key distribution (CV-QKD)</b>, targeting <b>RFSoC FPGA systems</b>.
-  It unifies <b>EMS</b>, <b>MM</b>, and <b>FB-EMS</b> within a single HLS-based architecture.
+  The current implementation provides EMS, MM, and FB-EMS decoder paths in a C/C++ HLS codebase.
 </p>
 
 ---
 
-## ✨ Highlights
+## Highlights
 
-- 🔁 **Multi-algorithm framework**  
-  Unified support for **EMS**, **MM**, and **FB-EMS** in one architecture.
+- **Multi-algorithm NB-LDPC framework**  
+  Supports Extended Min-Sum (EMS), Min-Max (MM), and Forward-Backward EMS (FB-EMS).
 
-- ⚙️ **Runtime configurability**  
-  Decoder mode, iteration limits, and control parameters can be selected at run time.
+- **Runtime-compatible unified accelerator**  
+  `qarde_accel` keeps the original runtime-selectable decoder interface through `qarde_cnu_mode_t`.
 
-- 🚀 **FPGA-oriented performance**  
-  Deeply pipelined message passing, multi-level parallelism, and structured on-chip memory organization.
+- **Mode-specialized synthesis tops**  
+  `qarde_accel_ems`, `qarde_accel_mm`, and `qarde_accel_fbems` allow each decoder mode to be synthesized independently. This reduces synthesis scope and gives Vitis HLS more freedom to optimize each datapath.
 
-- 📡 **CV-QKD deployment focus**  
-  Designed for low-SNR reconciliation in practical CV-QKD systems on **RFSoC4x2**.
+- **FPGA-oriented datapath organization**  
+  The design uses pipelined message passing, partitioned q-ary message arrays, BRAM-backed buffers, and explicit CNU implementations for each algorithm.
 
-- 🧩 **Modular HLS implementation**  
-  Clean decomposition into initialization, VNU, permutation, CNU, inverse permutation, and decision blocks.
+- **Testbench coverage for public development**  
+  The repository includes C-simulation tests for the algorithm kernels and dedicated top-level smoke tests for EMS, MM, and FB-EMS.
 
-- 📖 **Research-backed open-source framework**  
-  Proposed and released as a research framework accompanying the QARDE paper.
-
----
-
-## 📌 Overview
-
-In CV-QKD systems, reconciliation is one of the dominant bottlenecks, especially in the low-SNR regime where
-NB-LDPC decoding accounts for most of the computational cost. QARDE addresses this challenge with a scalable
-FPGA architecture that combines:
-
-- deeply pipelined message passing
-- fine-grained parallelism
-- carefully organized on-chip memory
-- runtime algorithm configurability
-
-QARDE is implemented in **C/C++ High-Level Synthesis (HLS)** and targets **RFSoC FPGA systems** for practical,
-deployment-oriented CV-QKD reconciliation.
+- **CV-QKD deployment focus**  
+  QARDE is designed for low-SNR information reconciliation in RFSoC-based CV-QKD systems.
 
 ---
 
-## 🏗️ System Context
+## System Context
 
-QARDE is designed as part of an RFSoC-based CV-QKD reconciliation platform. The decoder sits in the digital
-post-processing path and can interface naturally with mixed-signal RFSoC-based DAC/ADC infrastructure.
+In CV-QKD systems, information reconciliation is a major computational bottleneck, especially in the low-SNR regime where NB-LDPC decoding dominates processing cost. QARDE addresses this with a hardware-oriented HLS implementation that combines:
+
+- q-ary LDPC message passing
+- configurable iteration control
+- mode-specific check-node update logic
+- parallel message processing across field symbols and graph edges
+- syndrome-based early stopping
 
 <p align="center">
   <img src="Figs/CV-QKD_Bench.png" alt="QARDE deployment in RFSoC-based CV-QKD platform" width="860">
@@ -71,31 +61,29 @@ post-processing path and can interface naturally with mixed-signal RFSoC-based D
 
 ---
 
-## 🧠 Supported Decoder Modes
+## Decoder Modes
 
-| Mode | Message Representation | Main Strength | Typical Advantage |
+| Mode | Message Representation | Check-Node Update | Typical Advantage |
 |---|---|---|---|
-| **EMS** | Truncated q-ary candidate lists | Strong decoding performance with reduced complexity | Good balance between performance and cost |
-| **MM** | Full-length q-ary messages | Regular and hardware-friendly datapath | High throughput and simpler control |
-| **FB-EMS** | Truncated lists with forward-backward recursion | Reduced logic and memory usage | Efficient CNU realization with strong practical performance |
+| **EMS** | Truncated q-ary candidate lists | Reduced EMS convolution | Strong decoding quality with lower complexity than full BP |
+| **MM** | Full-length q-ary messages | Min-max update | Regular datapath and high-throughput implementation |
+| **FB-EMS** | Truncated q-ary candidate lists | Forward-backward chain of 2-input EMS steps | Efficient CNU realization with reduced logic and memory pressure |
 
 ### EMS
-EMS truncates each q-ary message to the top-`nm` candidates and performs reduced-complexity check-node processing.
-It achieves near-BP performance with significantly lower complexity.
+
+EMS keeps only the most reliable q-ary candidates in each message and performs reduced-complexity check-node processing. In QARDE, the EMS path is implemented by `qarde_decoder_ems` and the EMS CNU in `qarde_ems_cnu.hpp`.
 
 ### MM
-MM uses full-length q-ary messages and replaces sum-based convolution with min-max operations, resulting in a regular
-and hardware-friendly implementation with strong throughput potential.
+
+MM operates on full-length q-ary messages and replaces sum-product style convolution with min-max operations. In QARDE, the MM path is implemented by `qarde_decoder_mm` and the MM CNU in `qarde_mm_cnu.hpp`.
 
 ### FB-EMS
-FB-EMS keeps truncated lists like EMS, but replaces direct multi-input EMS convolution with a forward-backward chain
-of 2-input EMS operations. This reduces logic and memory usage while preserving strong decoding performance.
+
+FB-EMS uses truncated lists like EMS, but decomposes high-degree check-node processing into forward and backward 2-input EMS recursions. In QARDE, the FB-EMS path is implemented by `qarde_decoder_fbems` and the FB-EMS CNU in `qarde_fbems_cnu.hpp`.
 
 ---
 
-## 🔄 Unified Decoder Flow
-
-QARDE follows a common NB-LDPC message-passing pipeline:
+## Decoder Flow
 
 <p align="center">
   <img src="Figs/decoder-flow.png" alt="Unified QARDE decoder flow" width="860">
@@ -103,58 +91,186 @@ QARDE follows a common NB-LDPC message-passing pipeline:
 
 ```text
 Initialization
-   ↓
+   |
+   v
 Variable Node Update (VNU)
-   ↓
-Permutation
-   ↓
-Check Node Update (CNU)
-   ↓
-Inverse Permutation
-   ↓
-Decision / Syndrome Check
+   |
+   v
+Permutation to check-node domain
+   |
+   v
+Check Node Update (EMS / MM / FB-EMS)
+   |
+   v
+Inverse permutation to variable-node domain
+   |
+   v
+A-posteriori decision and syndrome check
 ```
 
-This unified flow is shared across **EMS**, **MM**, and **FB-EMS**. The principal difference among modes lies in the
-implementation of the **CNU** stage.
+The three decoder modes share the same graph initialization, VNU, permutation, inverse permutation, decision, and syndrome-check infrastructure. The main algorithm-specific block is the CNU stage.
 
 ---
 
-## 🧱 Main Architecture Modules
+## Current HLS Design
+
+QARDE currently exposes four accelerator entry points:
+
+| Top Function | Source File | Purpose |
+|---|---|---|
+| `qarde_accel` | `src/qarde_accel.cpp` | Runtime-selectable unified top using `qarde_cnu_mode_t` |
+| `qarde_accel_ems` | `src/qarde_accel_ems.cpp` | Dedicated EMS synthesis top |
+| `qarde_accel_mm` | `src/qarde_accel_mm.cpp` | Dedicated MM synthesis top |
+| `qarde_accel_fbems` | `src/qarde_accel_fbems.cpp` | Dedicated FB-EMS synthesis top |
+
+The dedicated tops use the same external data style as the unified accelerator:
+
+- input intrinsic LLR stream: `hls::stream<LLR_TYPE>`
+- output hard decisions: AXI `m_axi` pointer
+- control parameters: AXI-Lite
+- syndrome result: AXI-Lite output
+
+This split keeps the runtime-compatible interface available while making mode-by-mode HLS synthesis faster and easier to inspect.
+
+---
+
+## Main Architecture Modules
 
 | Module | Role |
 |---|---|
-| `QARDE_init` | Builds the Tanner graph from COO-format `H`, constructs adjacency tables, edge metadata, and permutation tables, and clears message buffers |
-| `QARDE_vnu` | Performs variable-node update, extrinsic combination, minimum-based normalization, optional correction, and clipping |
-| `QARDE_perm` | Maps VN-domain messages into CN-domain messages using edge coefficient permutation tables |
-| `QARDE_cnu` | Implements the selected check-node update mode: **EMS**, **MM**, or **FB-EMS** |
-| `QARDE_invperm` | Converts C2V messages back from CN domain to VN domain |
-| `QARDE_dec` | Computes a-posteriori metrics, forms hard decisions, and performs syndrome checking for early stopping |
+| `qarde_init.hpp` | Builds Tanner-graph adjacency, edge metadata, permutation tables, and clears message buffers |
+| `qarde_vnu.hpp` | Performs variable-node update, extrinsic combination, correction, normalization, and clipping |
+| `qarde_perm.hpp` | Permutes VN-domain messages into CN-domain order using GF coefficient tables |
+| `qarde_ems_cnu.hpp` | EMS check-node update |
+| `qarde_mm_cnu.hpp` | MM check-node update |
+| `qarde_fbems_cnu.hpp` | FB-EMS forward-backward check-node update |
+| `qarde_dec.hpp` | A-posteriori decision and syndrome checking |
+| `qarde_gf.hpp` | GF arithmetic and coefficient permutation helpers |
+| `qarde_tools.hpp` | Shared sort, top-k, and utility templates |
+| `qarde_config.hpp` | Public accelerator function declarations |
+| `nb_ldpc.hpp` | LDPC code parameters and parity-check matrix data |
+
+Mode-specific decoder wrappers are provided in `qarde_ems.hpp`, `qarde_mm.hpp`, and `qarde_fbems.hpp`. The original runtime-selectable decoder wrapper is kept in `qarde.hpp`.
 
 ---
 
-## ⚙️ Design Philosophy
+## Repository Structure
 
-QARDE is designed to balance three competing objectives:
-
-- **Error-correction performance**
-- **Throughput**
-- **Hardware cost**
-
-Rather than locking the system to a single decoding algorithm, QARDE provides a **reconfigurable operating space**:
-
-- **EMS** for strong decoding quality
-- **MM** for regularity and throughput
-- **FB-EMS** for reduced logic and memory usage
-
-This makes QARDE suitable for different channel conditions, code parameters, and deployment constraints in CV-QKD systems.
+```text
+QARDE/
+├── Figs/
+│   ├── CV-QKD_Bench.png
+│   ├── QARDEoverall.png
+│   ├── decoder-flow.png
+│   └── ...
+├── src/
+│   ├── nb_ldpc.hpp
+│   ├── qarde.hpp
+│   ├── qarde_ems.hpp
+│   ├── qarde_mm.hpp
+│   ├── qarde_fbems.hpp
+│   ├── qarde_accel.cpp
+│   ├── qarde_accel_ems.cpp
+│   ├── qarde_accel_mm.cpp
+│   ├── qarde_accel_fbems.cpp
+│   ├── qarde_config.hpp
+│   ├── qarde_dec.hpp
+│   ├── qarde_ems_cnu.hpp
+│   ├── qarde_mm_cnu.hpp
+│   ├── qarde_fbems_cnu.hpp
+│   ├── qarde_gf.hpp
+│   ├── qarde_init.hpp
+│   ├── qarde_perm.hpp
+│   ├── qarde_tools.hpp
+│   └── qarde_vnu.hpp
+├── testbench/
+│   ├── run_csim_ems.tcl
+│   ├── run_csim_mm.tcl
+│   ├── run_csim_fbems.tcl
+│   ├── run_csim_top_ems.tcl
+│   ├── run_csim_top_mm.tcl
+│   ├── run_csim_top_fbems.tcl
+│   ├── tb_ems_algorithm.cpp
+│   ├── tb_mm_algorithm.cpp
+│   ├── tb_fbems_algorithm.cpp
+│   ├── tb_top_ems.cpp
+│   ├── tb_top_mm.cpp
+│   └── tb_top_fbems.cpp
+├── README.md
+└── .gitignore
+```
 
 ---
 
-## 📊 Reported Performance Snapshot
+## Running C Simulation
 
-The QARDE paper reports RFSoC4x2 decoding throughput in the range of **2.26–12.82 Mbps** across evaluated code
-sizes, field orders, and decoder modes.
+The testbench scripts are written for Vitis HLS. On the development server, source the Vitis 2025.2 environment before running tests:
+
+```bash
+source /home/cad/xilinx/Vivado-2025.2/2025.2/Vitis/settings64.sh
+```
+
+Run algorithm-level C simulation:
+
+```bash
+vitis-run --mode hls --tcl testbench/run_csim_ems.tcl
+vitis-run --mode hls --tcl testbench/run_csim_mm.tcl
+vitis-run --mode hls --tcl testbench/run_csim_fbems.tcl
+```
+
+Run dedicated top-level smoke tests:
+
+```bash
+vitis-run --mode hls --tcl testbench/run_csim_top_ems.tcl
+vitis-run --mode hls --tcl testbench/run_csim_top_mm.tcl
+vitis-run --mode hls --tcl testbench/run_csim_top_fbems.tcl
+```
+
+---
+
+## Synthesizing Dedicated Tops
+
+The recommended development flow is to synthesize one dedicated top at a time. For example, a minimal FB-EMS synthesis Tcl script is:
+
+```tcl
+open_project qarde_fbems_hls
+set_top qarde_accel_fbems
+add_files src/qarde_accel_fbems.cpp -cflags "-std=c++17 -I./src"
+open_solution "hls" -flow_target vivado
+set_part {xcu55c-fsvh2892-2L-e}
+create_clock -period 2.8 -name default
+csynth_design
+exit
+```
+
+Equivalent top/source pairs are:
+
+| Mode | `set_top` | Source |
+|---|---|---|
+| EMS | `qarde_accel_ems` | `src/qarde_accel_ems.cpp` |
+| MM | `qarde_accel_mm` | `src/qarde_accel_mm.cpp` |
+| FB-EMS | `qarde_accel_fbems` | `src/qarde_accel_fbems.cpp` |
+
+The unified runtime-selectable top can still be synthesized with `set_top qarde_accel` and `src/qarde_accel.cpp`, but the dedicated tops are usually better for mode-specific optimization and warning inspection.
+
+---
+
+## Implementation Notes
+
+- **Design flow:** C/C++ High-Level Synthesis with Vitis HLS
+- **Validated tool version:** Vitis 2025.2 development flow
+- **Target device used by current scripts:** `xcu55c-fsvh2892-2L-e`
+- **Target platform class:** RFSoC FPGA systems
+- **Application:** CV-QKD information reconciliation
+- **Supported modes:** EMS, MM, and FB-EMS
+- **Runtime controls:** correction mode, iteration limit, damping, offset, and scaling parameters
+- **Compile-time parameters:** GF order, graph size, row/column degree, list size, and unroll factors
+
+---
+
+## Reported Performance Snapshot
+
+The QARDE paper reports RFSoC4x2 decoding throughput in the range of **2.26-12.82 Mbps** across evaluated code sizes, field orders, and decoder modes.
 
 To highlight evaluation trends, the following figures can be included directly in the repository documentation.
 
@@ -166,64 +282,32 @@ To highlight evaluation trends, the following figures can be included directly i
 
 ---
 
-## 🛠️ Implementation Notes
+## Paper
 
-- **Design flow:** C/C++ High-Level Synthesis (HLS)
-- **Target platform:** RFSoC FPGA systems
-- **Application:** CV-QKD reconciliation
-- **Supported modes:** EMS / MM / FB-EMS
-- **Run-time configurable:** mode selection, iteration count, decoder controls
-- **Compile-time specialized:** field order, graph dimensions, degree constraints, parallelism factors
-
----
-
-## 📂 Repository Structure
-
-```text
-QARDE/
-├── Figs/
-├── src/
-│   ├── nb_ldpc.hpp
-│   ├── qarde.hpp
-│   ├── qarde_accel.cpp
-│   ├── qarde_config.hpp
-│   ├── qarde_dec.hpp
-│   ├── qarde_ems_cnu.hpp
-│   ├── qarde_fbems_cnu.hpp
-│   ├── qarde_gf.hpp
-│   ├── qarde_init.hpp
-│   ├── qarde_mm_cnu.hpp
-│   ├── qarde_perm.hpp
-│   ├── qarde_tools.hpp
-│   └── qarde_vnu.hpp
-├── .gitignore
-└── README.md
-```
-
----
-
-## 📚 Paper
-
-**QARDE: An Adaptive Reconfigurable NB-LDPC Decoder Engine on RFSoC FPGAs for CV-QKD Post-Processing**  
+**QARDE: A CV-QKD-based Adaptive Reconfigurable NB-LDPC Decoder Engine for RFSoC FPGA Systems**  
 Kaijie Wei, Devanshu Garg, Ryutaro Nagai, Takao Tomono, and Hideharu Amano.
 
----
-
-## 🔗 Project Link
-
-The paper references the open-source project repository at:
-
-`https://github.com/WKJSpace/QARDE.git`
+This repository is the public research artifact for the submitted QARDE manuscript.
 
 ---
 
-## 🙌 Citation
+## Citation
 
 ```bibtex
 @article{wei2026qarde,
   author = {Wei, Kaijie and Garg, Devanshu and Nagai, Ryutaro and Tomono, Takao and Amano, Hideharu},
-  title  = {QARDE: An Adaptive Reconfigurable NB-LDPC Decoder Engine on RFSoC FPGAs for CV-QKD Post-Processing},
+  title  = {QARDE: A CV-QKD-based Adaptive Reconfigurable NB-LDPC Decoder Engine for RFSoC FPGA Systems},
+  journal = {ACM Transactions on Reconfigurable Technology and Systems},
   year   = {2026},
   note   = {Manuscript under review}
 }
 ```
+
+---
+
+## Project Link
+
+```text
+https://github.com/WKJSpace/QARDE.git
+```
+
